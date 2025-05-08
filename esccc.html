@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Escape Quest – Stadtabenteuer</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    body {
+      font-family: 'Arial', sans-serif;
+      background: url('cave.jpg') no-repeat center center fixed;
+      background-size: cover;
+      color: #f0e6d2;
+      padding: 20px;
+      text-align: center;
+    }
+
+    select, input, button {
+      padding: 12px;
+      font-size: 16px;
+      margin: 10px;
+      border-radius: 5px;
+      border: none;
+    }
+
+    button {
+      background-color: #3a2e2e;
+      color: #fff;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: #5c4343;
+    }
+
+    .riddle {
+      background: rgba(10, 10, 10, 0.8);
+      border-radius: 10px;
+      padding: 20px;
+      margin-top: 20px;
+      box-shadow: 0 0 15px rgba(255, 222, 173, 0.2);
+    }
+
+    #map {
+      height: 300px;
+      width: 100%;
+      border-radius: 10px;
+      margin-top: 20px;
+    }
+
+    #loader {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #ccc;
+      font-size: 1.5em;
+      z-index: 9999;
+    }
+
+    .loading-text {
+      animation: flicker 2s infinite;
+      text-shadow: 0 0 5px #ffcc00;
+    }
+
+    @keyframes flicker {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+  </style>
+</head>
+
+<body onload="showLoading()">
+  <div id="loader"><div class="loading-text">🔐 Lade dein Abenteuer...</div></div>
+
+  <div id="mainContent" style="display: none;">
+    <img src="logo.png" alt="Escape Quest Logo" style="width: 200px; margin-bottom: 15px; border-radius: 10px; box-shadow: 0 0 20px rgba(255,200,100,0.3);" />
+    <h1>🗝️ Escape Quest</h1>
+    <p>Wähle eine Stadt und starte dein dunkles Abenteuer!</p>
+
+    <select id="citySelect">
+      <option value="">-- Stadt wählen --</option>
+      <option value="berlin">Berlin</option>
+      <option value="muenchen">München</option>
+      <option value="hamburg">Hamburg</option>
+    </select>
+    <br>
+    <button onclick="startQuest()">Start</button>
+    <button id="soundToggle" onclick="toggleSound()">🔇 Ton einschalten</button>
+
+    <div id="gameArea"></div>
+  </div>
+
+  <audio id="bgm" loop>
+    <source src="medieval-ambient.mp3" type="audio/mpeg">
+  </audio>
+
+  <script>
+    const quests = {
+      berlin: {
+        coords: { lat: 52.516275, lon: 13.377704 },
+        radius: 0.2,
+        riddles: [
+          { question: "🔍 Ich sah Könige marschieren, Mauern fallen. Fünf Säulen trage ich. Was bin ich?", answer: "brandenburger tor" },
+          { question: "📜 Ich wurde 1791 fertiggestellt. Addiere Quersumme des Baujahrs zur Anzahl Buchstaben meines Namens (ohne Leerzeichen).", answer: "36" },
+          { question: "🐎 Wie heißt die Figur mit vier Pferden auf meinem Dach?", answer: "quadriga" }
+        ]
+      },
+      muenchen: {
+        coords: { lat: 48.137154, lon: 11.575490 },
+        radius: 0.2,
+        riddles: [
+          { question: "⛪ Ritter tanzen zur vollen Stunde, eine goldene Dame wacht in der Mitte. Wo bist du?", answer: "marienplatz" },
+          { question: "🌟 Die goldene Figur ist Maria. Wie viele Buchstaben haben 'Maria' + 'Marienplatz'?", answer: "15" },
+          { question: "🔔 Wie viele Figuren bewegen sich beim Glockenspiel oben und unten zusammen?", answer: "32" }
+        ]
+      },
+      hamburg: {
+        coords: { lat: 53.541280, lon: 9.984550 },
+        radius: 0.2,
+        riddles: [
+          { question: "🎶 Mein Dach gleicht Wellen, ich steh am Wasser. Wer bin ich?", answer: "elbphilharmonie" },
+          { question: "🌊 Ich habe etwa 1100 Glaselemente. Was ist die Quersumme von 1100?", answer: "2" },
+          { question: "🏗️ Ich wurde 2016 eröffnet. Addiere das Jahr und die Quersumme.", answer: "2023" }
+        ]
+      }
+    };
+
+    let currentStep = 0;
+    let selectedQuest = null;
+    let isSoundOn = false;
+
+    function showLoading() {
+      setTimeout(() => {
+        document.getElementById("loader").style.display = "none";
+        document.getElementById("mainContent").style.display = "block";
+      }, 2000);
+    }
+
+    function toggleSound() {
+      const audio = document.getElementById("bgm");
+      isSoundOn = !isSoundOn;
+      if (isSoundOn) {
+        audio.play();
+        document.getElementById("soundToggle").textContent = "🔊 Ton ausschalten";
+      } else {
+        audio.pause();
+        document.getElementById("soundToggle").textContent = "🔇 Ton einschalten";
+      }
+    }
+
+    function startQuest() {
+      const cityKey = document.getElementById("citySelect").value;
+      if (!quests[cityKey]) {
+        document.getElementById("gameArea").innerHTML = "<p>❗ Bitte wähle eine gültige Stadt.</p>";
+        return;
+      }
+
+      selectedQuest = quests[cityKey];
+      currentStep = 0;
+      renderStep();
+    }
+
+    function renderStep() {
+      const step = selectedQuest.riddles[currentStep];
+      document.getElementById("gameArea").innerHTML = `
+        <div class="riddle">
+          <p><strong>Stufe ${currentStep + 1}:</strong></p>
+          <p>${step.question}</p>
+          <input type="text" id="answerInput" placeholder="Antwort...">
+          <br><button onclick="checkAnswer()">Antwort prüfen</button>
+          <p id="result"></p>
+        </div>
+      `;
+    }
+
+    function checkAnswer() {
+      const input = document.getElementById("answerInput").value.trim().toLowerCase();
+      const correct = selectedQuest.riddles[currentStep].answer.toLowerCase();
+      const result = document.getElementById("result");
+
+      if (input === correct) {
+        currentStep++;
+        if (currentStep < selectedQuest.riddles.length) {
+          renderStep();
+        } else {
+          document.getElementById("gameArea").innerHTML = `<div class='riddle'><p>🎉 Du hast alle Rätsel gelöst!</p><p>🏁 Escape geschafft!</p></div>`;
+        }
+      } else {
+        result.textContent = "❌ Falsch. Versuch es nochmal.";
+      }
+    }
+  </script>
+</body>
+</html>
